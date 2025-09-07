@@ -28,7 +28,7 @@
 #         - docker run -d --name telegram-bot -e BOT_TOKEN=$BOT_TOKEN -e GROUP_CHAT_ID=$GROUP_CHAT_ID -e ADMIN_IDS=$ADMIN_IDS -v /opt/drone/data:/opt/drone/data your-dockerhub-user/telegram-bot:latest
 
 kind: pipeline
-type: docker
+type: exec
 name: deploy-bot
 
 steps:
