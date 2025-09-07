@@ -59,6 +59,22 @@ async def start_menu(message: Message) -> None:
         await message.answer("Главное меню", reply_markup=user_menu())
 
 
+async def check_settings(message: Message) -> None:
+    """Команда для проверки настроек (только для админов)"""
+    settings = get_settings()
+    if not is_admin(message.from_user.id, settings.admin_ids):
+        await message.answer("Недостаточно прав")
+        return
+    
+    await message.answer(
+        f"🔧 <b>Настройки бота:</b>\n\n"
+        f"📱 <b>GROUP_CHAT_ID:</b> {settings.group_chat_id}\n"
+        f"👥 <b>ADMIN_IDS:</b> {settings.admin_ids}\n"
+        f"🤖 <b>BOT_TOKEN:</b> {settings.bot_token[:10]}...",
+        parse_mode="HTML"
+    )
+
+
 async def on_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     await start_menu(message)
@@ -108,7 +124,7 @@ async def handle_upload_photo(message: Message, state: FSMContext) -> None:
     # Очищаем состояние
     await state.clear()
     
-    # Отправляем подтверждение
+    # Отправляем подтверждение пользователю
     await message.answer(
         f"✅ <b>Отлично!</b> Ваш билет зарегистрирован!\n\n"
         f"🎟 <b>Номер билета: №{ticket_number}</b>\n\n"
@@ -157,6 +173,7 @@ async def admin_start_draw(message: Message) -> None:
         if not ticket:
             await message.answer("⚠️ Нет активных билетов для розыгрыша")
             return
+        # Отправляем фото с результатом розыгрыша админу для принятия решения
         await message.answer_photo(
             ticket["file_id"],
             caption=f"🎲 Выпал билет №{ticket['ticket_number']} (@{ticket['username']})",
@@ -372,6 +389,9 @@ async def main() -> None:
 
     # Архивирование
     dp.message.register(admin_archive, F.text == "📦 Архивировать лотерею")
+    
+    # Проверка настроек
+    dp.message.register(check_settings, F.text == "🔧 Проверить настройки")
 
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 

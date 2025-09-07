@@ -23,6 +23,7 @@ def admin_menu() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="📷 Показать фото по номеру")],
             [KeyboardButton(text="🗑 Удалить билетик")],
             [KeyboardButton(text="📦 Архивировать лотерею")],
+            [KeyboardButton(text="🔧 Проверить настройки")],
             [KeyboardButton(text="⬅️ В меню")],
         ],
         resize_keyboard=True,
