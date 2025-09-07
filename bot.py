@@ -39,6 +39,10 @@ class AskReason(StatesGroup):
     delete_reason = State()
 
 
+class UploadPhoto(StatesGroup):
+    waiting_for_photo = State()
+
+
 # Глобальная переменная для settings
 _settings = None
 
@@ -60,16 +64,60 @@ async def on_start(message: Message, state: FSMContext) -> None:
     await start_menu(message)
 
 
-async def handle_upload_photo(message: Message) -> None:
+async def start_photo_upload(message: Message, state: FSMContext) -> None:
+    """Начало процесса загрузки фото"""
+    await state.set_state(UploadPhoto.waiting_for_photo)
+    await message.answer(
+        "📸 <b>Загрузка фото для лотереи</b>\n\n"
+        "Чтобы загрузить фото:\n"
+        "1️⃣ Нажмите на кнопку <b>📎</b> (скрепка) в поле ввода сообщения\n"
+        "2️⃣ Выберите <b>📷 Фото</b>\n"
+        "3️⃣ Выберите фото из галереи или сделайте новое\n"
+        "4️⃣ Отправьте фото\n\n"
+        "💡 <i>Или просто перетащите фото в чат</i>\n\n"
+        "❌ Для отмены нажмите кнопку '⬅️ В меню'",
+        reply_markup=back_menu(),
+        parse_mode="HTML"
+    )
+
+
+async def handle_upload_photo(message: Message, state: FSMContext) -> None:
+    """Обработка загруженного фото"""
     settings = get_settings()
-    if not message.photo:
-        await message.answer("Пожалуйста, отправьте фото")
+    
+    # Проверяем, что мы в состоянии ожидания фото
+    current_state = await state.get_state()
+    if current_state != UploadPhoto.waiting_for_photo:
         return
+    
+    if not message.photo:
+        await message.answer(
+            "❌ Пожалуйста, отправьте именно <b>фото</b>, а не другой тип файла.\n\n"
+            "Попробуйте снова или нажмите '⬅️ В меню' для отмены.",
+            reply_markup=back_menu(),
+            parse_mode="HTML"
+        )
+        return
+    
+    # Обрабатываем фото
     largest_photo = max(message.photo, key=lambda p: p.file_size or 0)
     file_id = largest_photo.file_id
     ticket_number = await get_next_ticket_number()
     await add_ticket(ticket_number, message.from_user.id, message.from_user.username, file_id)
-    await message.answer(f"✅ Ваш билет зарегистрирован! Номер: №{ticket_number}")
+    
+    # Очищаем состояние
+    await state.clear()
+    
+    # Отправляем подтверждение
+    await message.answer(
+        f"✅ <b>Отлично!</b> Ваш билет зарегистрирован!\n\n"
+        f"🎟 <b>Номер билета: №{ticket_number}</b>\n\n"
+        f"Теперь вы можете посмотреть свои билеты в главном меню.",
+        reply_markup=user_menu(),
+        parse_mode="HTML"
+    )
+    
+    # Уведомляем в группу
     await message.bot.send_message(
         chat_id=settings.group_chat_id,
         text=f"🎟 Пользователь @{message.from_user.username or message.from_user.id} получил билет №{ticket_number}",
@@ -288,7 +336,8 @@ async def main() -> None:
     dp.message.register(on_start, CommandStart())
 
     # Пользовательские действия
-    dp.message.register(handle_upload_photo, F.photo)
+    dp.message.register(start_photo_upload, F.text == "📸 Загрузить новое фото")
+    dp.message.register(handle_upload_photo, F.photo, UploadPhoto.waiting_for_photo)
     dp.message.register(handle_my_tickets, F.text == "🎟 Посмотреть мои лотерейные билетики")
 
     # Админские действия
@@ -306,6 +355,20 @@ async def main() -> None:
     dp.message.register(admin_delete_reason_input, AskReason.delete_reason)
 
     dp.message.register(start_menu, F.text == "⬅️ В меню")
+    
+    # Обработка отмены загрузки фото
+    dp.message.register(start_menu, F.text == "⬅️ В меню", UploadPhoto.waiting_for_photo)
+    
+    # Обработка неправильного типа файла во время ожидания фото
+    async def handle_wrong_file_type(message: Message, state: FSMContext) -> None:
+        await message.answer(
+            "❌ Пожалуйста, отправьте именно <b>фото</b>, а не другой тип файла.\n\n"
+            "Попробуйте снова или нажмите '⬅️ В меню' для отмены.",
+            reply_markup=back_menu(),
+            parse_mode="HTML"
+        )
+    
+    dp.message.register(handle_wrong_file_type, UploadPhoto.waiting_for_photo)
 
     # Архивирование
     dp.message.register(admin_archive, F.text == "📦 Архивировать лотерею")

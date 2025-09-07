@@ -66,5 +66,3 @@ def user_tickets_inline_keyboard(ticket_numbers: list) -> InlineKeyboardMarkup:
         keyboard.append(row)
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
