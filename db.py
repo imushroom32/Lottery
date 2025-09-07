@@ -9,12 +9,20 @@
 
 from __future__ import annotations
 import os
+from pathlib import Path
 
 import aiosqlite
 from typing import Any, Dict, List, Optional, Tuple
 
 
-DB_PATH = os.getenv("DB_PATH", "/opt/drone/data/lottery_db.sqlite")
+# Путь к базе: по умолчанию — файл рядом с проектом
+DEFAULT_DB_PATH = (Path(__file__).parent / "data" / "lottery_db.sqlite").as_posix()
+DB_PATH = os.getenv("DB_PATH", DEFAULT_DB_PATH)
+
+# Гарантируем существование директории для БД (иначе sqlite выдаст unable to open database file)
+db_dir = os.path.dirname(DB_PATH)
+if db_dir:
+    os.makedirs(db_dir, exist_ok=True)
 
 
 CREATE_SCHEMA_SQL = """

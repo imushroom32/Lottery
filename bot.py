@@ -40,19 +40,29 @@ class AskReason(StatesGroup):
     delete_reason = State()
 
 
-async def start_menu(message: Message, settings) -> None:
+# Глобальная переменная для settings
+_settings = None
+
+
+def get_settings():
+    return _settings
+
+
+async def start_menu(message: Message) -> None:
+    settings = get_settings()
     if is_admin(message.from_user.id, settings.admin_ids):
         await message.answer("Главное меню (админ)", reply_markup=admin_menu())
     else:
         await message.answer("Главное меню", reply_markup=user_menu())
 
 
-async def on_start(message: Message, state: FSMContext, settings) -> None:
+async def on_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await start_menu(message, settings)
+    await start_menu(message)
 
 
-async def handle_upload_photo(message: Message, settings) -> None:
+async def handle_upload_photo(message: Message) -> None:
+    settings = get_settings()
     if not message.photo:
         await message.answer("Пожалуйста, отправьте фото")
         return
@@ -98,7 +108,8 @@ async def user_send_ticket_number(message: Message, state: FSMContext) -> None:
     await state.clear()
 
 
-async def admin_start_draw(message: Message, settings) -> None:
+async def admin_start_draw(message: Message) -> None:
+    settings = get_settings()
     if not is_admin(message.from_user.id, settings.admin_ids):
         await message.answer("Недостаточно прав")
         return
@@ -117,7 +128,8 @@ async def admin_start_draw(message: Message, settings) -> None:
         )
 
 
-async def admin_confirm_winner(callback: CallbackQuery, settings) -> None:
+async def admin_confirm_winner(callback: CallbackQuery) -> None:
+    settings = get_settings()
     if not is_admin(callback.from_user.id, settings.admin_ids):
         await callback.answer("Нет прав", show_alert=True)
         return
@@ -140,7 +152,8 @@ async def admin_confirm_winner(callback: CallbackQuery, settings) -> None:
     await callback.answer("Победитель опубликован")
 
 
-async def admin_reject_ticket_start(callback: CallbackQuery, state: FSMContext, settings) -> None:
+async def admin_reject_ticket_start(callback: CallbackQuery, state: FSMContext) -> None:
+    settings = get_settings()
     if not is_admin(callback.from_user.id, settings.admin_ids):
         await callback.answer("Нет прав", show_alert=True)
         return
@@ -156,10 +169,11 @@ async def admin_reject_ticket_start(callback: CallbackQuery, state: FSMContext, 
     await callback.answer()
 
 
-async def admin_reject_reason_input(message: Message, state: FSMContext, settings) -> None:
+async def admin_reject_reason_input(message: Message, state: FSMContext) -> None:
+    settings = get_settings()
     if message.text == "⬅️ В меню":
         await state.clear()
-        await start_menu(message, settings)
+        await start_menu(message)
         return
     reason = message.text.strip()
     data = await state.get_data()
@@ -171,7 +185,7 @@ async def admin_reject_reason_input(message: Message, state: FSMContext, setting
     )
     await state.clear()
     # Автозапуск нового розыгрыша
-    await admin_start_draw(message, settings)
+    await admin_start_draw(message)
 
 
 async def admin_show_by_number_ask(message: Message, state: FSMContext) -> None:
@@ -179,10 +193,10 @@ async def admin_show_by_number_ask(message: Message, state: FSMContext) -> None:
     await message.answer("Введите номер билета", reply_markup=back_menu())
 
 
-async def admin_show_by_number_input(message: Message, state: FSMContext, settings) -> None:
+async def admin_show_by_number_input(message: Message, state: FSMContext) -> None:
     if message.text == "⬅️ В меню":
         await state.clear()
-        await start_menu(message, settings)
+        await start_menu(message)
         return
     num = parse_int_safe(message.text)
     if num is None:
@@ -214,10 +228,11 @@ async def admin_delete_number_input(message: Message, state: FSMContext) -> None
     await message.answer("Укажите причину удаления", reply_markup=back_menu())
 
 
-async def admin_delete_reason_input(message: Message, state: FSMContext, settings) -> None:
+async def admin_delete_reason_input(message: Message, state: FSMContext) -> None:
+    settings = get_settings()
     if message.text == "⬅️ В меню":
         await state.clear()
-        await start_menu(message, settings)
+        await start_menu(message)
         return
     reason = message.text.strip()
     data = await state.get_data()
@@ -230,7 +245,8 @@ async def admin_delete_reason_input(message: Message, state: FSMContext, setting
     await state.clear()
 
 
-async def admin_archive(message: Message, settings) -> None:
+async def admin_archive(message: Message) -> None:
+    settings = get_settings()
     await archive_lottery()
     await message.bot.send_message(
         settings.group_chat_id,
@@ -239,46 +255,45 @@ async def admin_archive(message: Message, settings) -> None:
 
 
 async def main() -> None:
-    settings = load_settings()
+    global _settings
+    _settings = load_settings()
     await init_db()
 
     bot = Bot(
-        token=settings.bot_token,
+        token=_settings.bot_token,
         default=DefaultBotProperties(parse_mode="HTML")
     )
     dp = Dispatcher()
 
     # Команды и меню
-    dp.message.register(lambda m: on_start(m, dp.fsm.get_context(m.chat.id, m.from_user.id), settings), CommandStart())
+    dp.message.register(on_start, CommandStart())
 
     # Пользовательские действия
-    dp.message.register(lambda m: handle_upload_photo(m, settings), F.photo)
-    dp.message.register(lambda m: handle_my_tickets(m), F.text == "🎟 Посмотреть мои лотерейные билетики")
+    dp.message.register(handle_upload_photo, F.photo)
+    dp.message.register(handle_my_tickets, F.text == "🎟 Посмотреть мои лотерейные билетики")
     dp.message.register(ask_user_ticket_number, F.text == "🔍 Посмотреть фото по номеру билетика")
     dp.message.register(user_send_ticket_number, AskTicketNumber.user_view)
 
     # Админские действия
-    dp.message.register(lambda m: admin_start_draw(m, settings), F.text == "🎲 Запустить розыгрыш")
+    dp.message.register(admin_start_draw, F.text == "🎲 Запустить розыгрыш")
     dp.message.register(admin_show_by_number_ask, F.text == "📷 Показать фото по номеру")
-    dp.message.register(lambda m, s=dp.fsm: admin_show_by_number_input(m, s.get_context(m.chat.id, m.from_user.id), settings), AskTicketNumber.admin_view)
+    dp.message.register(admin_show_by_number_input, AskTicketNumber.admin_view)
 
-    dp.callback_query.register(lambda c: admin_confirm_winner(c, settings), F.data.startswith("confirm_win:"))
-    dp.callback_query.register(lambda c, s=dp.fsm: admin_reject_ticket_start(c, s.get_context(c.message.chat.id, c.from_user.id), settings), F.data.startswith("reject_win:"))
-    dp.message.register(lambda m, s=dp.fsm: admin_reject_reason_input(m, s.get_context(m.chat.id, m.from_user.id), settings), AskReason.reject_reason)
+    dp.callback_query.register(admin_confirm_winner, F.data.startswith("confirm_win:"))
+    dp.callback_query.register(admin_reject_ticket_start, F.data.startswith("reject_win:"))
+    dp.message.register(admin_reject_reason_input, AskReason.reject_reason)
 
     dp.message.register(admin_delete_ask, F.text == "🗑 Удалить билетик")
     dp.message.register(admin_delete_number_input, AskTicketNumber.admin_delete)
-    dp.message.register(lambda m, s=dp.fsm: admin_delete_reason_input(m, s.get_context(m.chat.id, m.from_user.id), settings), AskReason.delete_reason)
+    dp.message.register(admin_delete_reason_input, AskReason.delete_reason)
 
-    dp.message.register(lambda m: start_menu(m, settings), F.text == "⬅️ В меню")
+    dp.message.register(start_menu, F.text == "⬅️ В меню")
 
     # Архивирование
-    dp.message.register(lambda m: admin_archive(m, settings), F.text == "📦 Архивировать лотерею")
+    dp.message.register(admin_archive, F.text == "📦 Архивировать лотерею")
 
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-

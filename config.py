@@ -3,10 +3,11 @@
 """
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import List
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 
 @dataclass
@@ -32,7 +33,18 @@ def _parse_admin_ids(value: str) -> List[int]:
 
 
 def load_settings() -> Settings:
-    load_dotenv()
+    # 1) Пытаемся найти .env, поднимаясь от текущей рабочей директории
+    env_path = find_dotenv(usecwd=True)
+    if env_path:
+        load_dotenv(dotenv_path=env_path, override=True, encoding="utf-8")
+    else:
+        # 2) Пробуем .env рядом с текущим модулем (путь проекта при прямом запуске)
+        module_env = Path(__file__).with_name(".env")
+        if module_env.exists():
+            load_dotenv(dotenv_path=module_env.as_posix(), override=True, encoding="utf-8")
+        else:
+            # 3) Последняя попытка — стандартный поиск в CWD
+            load_dotenv(override=True, encoding="utf-8")
 
     bot_token = os.getenv("BOT_TOKEN", "").strip()
     if not bot_token:
