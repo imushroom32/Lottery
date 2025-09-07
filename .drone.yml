@@ -7,7 +7,8 @@ steps:
     image: docker:20.10
     volumes:
       - name: dockersock
-        path: /var/run/docker.sock
+        host:
+          path: /var/run/docker.sock
     commands:
       - docker build -t telegram-bot:latest .
 
