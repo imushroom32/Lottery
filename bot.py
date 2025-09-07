@@ -25,12 +25,11 @@ from db import (
     get_random_active_ticket,
     archive_lottery,
 )
-from keyboards import admin_menu, user_menu, back_menu, lottery_inline_actions
+from keyboards import admin_menu, user_menu, back_menu, lottery_inline_actions, user_tickets_inline_keyboard
 from utils import draw_lock, is_admin, parse_int_safe
 
 
 class AskTicketNumber(StatesGroup):
-    user_view = State()
     admin_view = State()
     admin_delete = State()
 
@@ -82,30 +81,19 @@ async def handle_my_tickets(message: Message) -> None:
     if not rows:
         await message.answer("У вас нет активных билетов")
         return
-    numbers = ", ".join(f"№{r[0]}" for r in rows)
-    await message.answer(f"Ваши активные билеты: {numbers}")
+    
+    # Извлекаем номера билетов из кортежей
+    ticket_numbers = [row[0] for row in rows]
+    
+    # Создаем inline-клавиатуру с номерами билетов
+    keyboard = user_tickets_inline_keyboard(ticket_numbers)
+    
+    await message.answer(
+        f"🎟 Ваши активные билеты ({len(ticket_numbers)} шт.):\n\nНажмите на номер билета, чтобы посмотреть фото:",
+        reply_markup=keyboard
+    )
 
 
-async def ask_user_ticket_number(message: Message, state: FSMContext) -> None:
-    await state.set_state(AskTicketNumber.user_view)
-    await message.answer("Введите номер билета", reply_markup=back_menu())
-
-
-async def user_send_ticket_number(message: Message, state: FSMContext) -> None:
-    if message.text == "⬅️ В меню":
-        await state.clear()
-        await message.answer("Главное меню", reply_markup=user_menu())
-        return
-    num = parse_int_safe(message.text)
-    if num is None:
-        await message.answer("Введите число")
-        return
-    ticket = await get_active_ticket_by_number(num)
-    if not ticket:
-        await message.answer("❌ Билет с таким номером не найден или он архивирован")
-        return
-    await message.answer_photo(ticket["file_id"], caption=f"Билет №{ticket['ticket_number']} (@{ticket['username']})")
-    await state.clear()
 
 
 async def admin_start_draw(message: Message) -> None:
@@ -245,6 +233,37 @@ async def admin_delete_reason_input(message: Message, state: FSMContext) -> None
     await state.clear()
 
 
+async def user_view_ticket_callback(callback: CallbackQuery) -> None:
+    """Обработчик нажатия на кнопку с номером билета"""
+    if not callback.data or not callback.data.startswith("view_ticket:"):
+        await callback.answer("Некорректный запрос", show_alert=True)
+        return
+    
+    # Извлекаем номер билета из callback_data
+    num = parse_int_safe(callback.data.split(":", 1)[1])
+    if num is None:
+        await callback.answer("Некорректный номер билета", show_alert=True)
+        return
+    
+    # Получаем билет
+    ticket = await get_active_ticket_by_number(num)
+    if not ticket:
+        await callback.answer("❌ Билет не найден или архивирован", show_alert=True)
+        return
+    
+    # Проверяем, что билет принадлежит пользователю
+    if ticket["user_id"] != callback.from_user.id:
+        await callback.answer("❌ У вас нет доступа к этому билету", show_alert=True)
+        return
+    
+    # Отправляем фото
+    await callback.message.answer_photo(
+        ticket["file_id"], 
+        caption=f"🎟 Ваш билет №{ticket['ticket_number']}"
+    )
+    await callback.answer()
+
+
 async def admin_archive(message: Message) -> None:
     settings = get_settings()
     await archive_lottery()
@@ -271,8 +290,6 @@ async def main() -> None:
     # Пользовательские действия
     dp.message.register(handle_upload_photo, F.photo)
     dp.message.register(handle_my_tickets, F.text == "🎟 Посмотреть мои лотерейные билетики")
-    dp.message.register(ask_user_ticket_number, F.text == "🔍 Посмотреть фото по номеру билетика")
-    dp.message.register(user_send_ticket_number, AskTicketNumber.user_view)
 
     # Админские действия
     dp.message.register(admin_start_draw, F.text == "🎲 Запустить розыгрыш")
@@ -281,6 +298,7 @@ async def main() -> None:
 
     dp.callback_query.register(admin_confirm_winner, F.data.startswith("confirm_win:"))
     dp.callback_query.register(admin_reject_ticket_start, F.data.startswith("reject_win:"))
+    dp.callback_query.register(user_view_ticket_callback, F.data.startswith("view_ticket:"))
     dp.message.register(admin_reject_reason_input, AskReason.reject_reason)
 
     dp.message.register(admin_delete_ask, F.text == "🗑 Удалить билетик")
