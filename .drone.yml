@@ -4,33 +4,24 @@ name: deploy-bot
 
 steps:
   - name: build
-    image: docker:20.10
-    volumes:
-      - name: dockersock
-        path: /var/run/docker.sock
-    commands:
-      - docker build -t telegram-bot:latest .
+    image: plugins/docker
+    settings:
+      repo: your-dockerhub-user/telegram-bot
+      tags: latest
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
 
   - name: deploy
-    image: docker:20.10
-    environment:
-      BOT_TOKEN:
-        from_secret: bot_token
-      GROUP_CHAT_ID:
-        from_secret: group_chat_id
-      DB_PATH:
-        from_secret: db_path
-      ADMIN_IDS:
-        from_secret: admin_ids
-    volumes:
-      - name: dockersock
-        path: /var/run/docker.sock
-    commands:
-      - docker stop telegram-bot || true
-      - docker rm telegram-bot || true
-      - docker run -d --name telegram-bot -e BOT_TOKEN=$BOT_TOKEN -e GROUP_CHAT_ID=$GROUP_CHAT_ID -e ADMIN_IDS=$ADMIN_IDS -v /opt/drone/data:/opt/drone/data -v /var/run/docker.sock:/var/run/docker.sock telegram-bot:latest
-
-volumes:
-  - name: dockersock
-    host:
-      path: /var/run/docker.sock
+    image: appleboy/drone-ssh
+    settings:
+      host: 185.80.129.200
+      username: root
+      password:
+        from_secret: ssh_password
+      script:
+        - docker pull your-dockerhub-user/telegram-bot:latest
+        - docker stop telegram-bot || true
+        - docker rm telegram-bot || true
+        - docker run -d --name telegram-bot -e BOT_TOKEN=$BOT_TOKEN -e GROUP_CHAT_ID=$GROUP_CHAT_ID -e ADMIN_IDS=$ADMIN_IDS -v /opt/drone/data:/opt/drone/data your-dockerhub-user/telegram-bot:latest
