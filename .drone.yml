@@ -69,4 +69,5 @@ steps:
       - docker stop telegram-bot || true
       - docker rm telegram-bot || true
       - docker run -d --name telegram-bot -e BOT_TOKEN=$BOT_TOKEN  -e GROUP_CHAT_ID=$GROUP_CHAT_ID -e ADMIN_IDS=$ADMIN_IDS -v /opt/drone/data:/opt/drone/data telegram-bot:latest
-
+      - sleep 5
+      - docker ps --filter "name=telegram-bot" --filter "status=running" --format '{{.Names}}' | grep -w telegram-bot
