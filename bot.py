@@ -11,6 +11,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message, ContentType
+from aiogram.client.default import DefaultBotProperties
 
 from config import load_settings
 from db import (
@@ -241,7 +242,10 @@ async def main() -> None:
     settings = load_settings()
     await init_db()
 
-    bot = Bot(token=settings.bot_token, parse_mode="HTML")
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
     dp = Dispatcher()
 
     # Команды и меню
