@@ -1,17 +1,20 @@
 # Используем лёгкий образ Python
 FROM python:3.11-slim
 
-# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Скопируем requirements (если есть)
-COPY requirements.txt .
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Установим зависимости
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем код бота внутрь контейнера
 COPY . .
 
-# Команда запуска
-CMD ["python", "main.py"]
+# Создаём папку под базу (если нет)
+RUN mkdir -p /opt/drone/data
+
+# Декларируем volume (хранение базы вне контейнера)
+VOLUME ["/opt/drone/data"]
+
+CMD ["python", "bot.py"]
