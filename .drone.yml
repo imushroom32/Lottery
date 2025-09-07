@@ -8,6 +8,7 @@ steps:
     settings:
       repo: your-dockerhub-user/telegram-bot
       tags: latest
+      dry_run: true
       username:
         from_secret: docker_username
       password:
