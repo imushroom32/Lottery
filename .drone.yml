@@ -58,6 +58,13 @@ steps:
       - docker build -t telegram-bot:latest .
 
   - name: deploy
+    environment:
+        BOT_TOKEN:
+          from_secret: bot_token
+        GROUP_CHAT_ID:
+          from_secret: group_chat_id
+        ADMIN_IDS:
+          from_secret: admin_ids
     commands:
       - docker stop telegram-bot || true
       - docker rm telegram-bot || true
