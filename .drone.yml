@@ -3,16 +3,6 @@ type: docker
 name: deploy-bot
 
 steps:
-  - name: build
-    image: plugins/docker
-    settings:
-      repo: your-dockerhub-user/telegram-bot
-      tags: latest
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-
   - name: deploy
     image: appleboy/drone-ssh
     settings:
@@ -21,7 +11,11 @@ steps:
       password:
         from_secret: ssh_password
       script:
-        - docker pull your-dockerhub-user/telegram-bot:latest
+        - cd /opt/bot/telegram-bot || mkdir -p /opt/bot/telegram-bot && cd /opt/bot/telegram-bot
+        # забираем свежий код из репозитория
+        - if [ ! -d ".git" ]; then git clone https://github.com/imushroom32/Lottery.git .; else git pull; fi
+        # билдим и деплоим контейнер
+        - docker build -t telegram-bot:latest .
         - docker stop telegram-bot || true
         - docker rm telegram-bot || true
-        - docker run -d --name telegram-bot -e BOT_TOKEN=$BOT_TOKEN -e GROUP_CHAT_ID=$GROUP_CHAT_ID -e ADMIN_IDS=$ADMIN_IDS -v /opt/drone/data:/opt/drone/data your-dockerhub-user/telegram-bot:latest
+        - docker run -d --name telegram-bot -e BOT_TOKEN=$BOT_TOKEN -e GROUP_CHAT_ID=$GROUP_CHAT_ID -e ADMIN_IDS=$ADMIN_IDS -v /opt/drone/data:/opt/drone/data telegram-bot:latest
